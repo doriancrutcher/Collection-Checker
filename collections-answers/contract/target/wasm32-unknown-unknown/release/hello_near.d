@@ -1,1 +1,1 @@
-/Users/doriankinoocrutcher/Documents/NEAR/Developer/Onboarding/collections-answers/contract/target/wasm32-unknown-unknown/release/hello_near.wasm: /Users/doriankinoocrutcher/Documents/NEAR/Developer/Onboarding/collections-answers/contract/src/lib.rs
+/Users/doriankinoocrutcher/Documents/NEAR/Developer/Onboarding/Collection\ Examples\ /collections-answers/contract/target/wasm32-unknown-unknown/release/hello_near.wasm: /Users/doriankinoocrutcher/Documents/NEAR/Developer/Onboarding/Collection\ Examples\ /collections-answers/contract/src/lib.rs
