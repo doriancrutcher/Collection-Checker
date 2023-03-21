@@ -61,7 +61,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(5 * TGAS))
-                    .evaluate_lookup_callback(contract_name.clone()),
+                    .evaluate_lookup_callback(contract_name.clone(), random_map_value),
             )
     }
 
@@ -69,11 +69,13 @@ impl Contract {
     pub fn evaluate_lookup_callback(
         #[callback_result] last_result: Result<String, PromiseError>,
         contract_name: AccountId,
+        random_value: String,
     ) -> bool {
         //  The callback only has access to the last action's result
         if let Ok(result) = last_result {
             log!(format!("The last result is {:?}", result));
-            true
+
+            random_value == result
         } else {
             log!("The batch call failed and all calls got reverted");
             false
@@ -90,6 +92,7 @@ impl Contract {
             .into_bytes();
 
         log!("vec val is {:?}", vec_arg);
+
         let no_arg = json!("").to_string().into_bytes();
 
         Promise::new(contract_name.clone())
@@ -139,7 +142,6 @@ impl Contract {
             .to_string()
             .into_bytes();
 
-        log!("vec val is {:?}", vec_arg);
         let no_arg = json!("").to_string().into_bytes();
 
         Promise::new(contract_name.clone())
@@ -158,7 +160,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(5 * TGAS))
-                    .evaluate_vec_multi_callback(contract_name.clone()),
+                    .evaluate_vec_multi_callback(contract_name.clone(), random_vec_value_array),
             )
     }
 
@@ -166,102 +168,64 @@ impl Contract {
     pub fn evaluate_vec_multi_callback(
         #[callback_result] last_result: Result<Vec<u8>, PromiseError>,
         contract_name: AccountId,
-    ) {
+        test_vector: Vec<u8>,
+    ) -> bool {
+        //  The callback only has access to the last action's result
+        if let Ok(result) = last_result {
+            log!(format!("The Test Vector is {:?}", test_vector));
+            log!(format!(
+                "The vector returned from the contract is {:?}",
+                result
+            ));
+            test_vector.eq(&result)
+        } else {
+            log!("The batch call failed and all calls got reverted");
+            false
+        }
+    }
+
+    pub fn add_val_to_map<T>(key: String, val: T, contract_name: AccountId) {
+        // Setup Arguments
+        let add_map_args = json!({"key":key,"value":val}).to_string().to_bytes();
+        Promise::new(&contract_name).function_call(
+            "add_to_map",
+            add_map_args,
+            NO_DEPOSIT,
+            Gas(5 * TGAS),
+        );
+    }
+
+    pub fn get_val_from_map(key: String, contract_name: AccountId) -> Promise {
+        let get_map_args = json!({ "key": key }).to_string().to_bytes();
+        Promise::new(&contract_name)
+            .function_call("get_from_map", get_map_args, NO_DEPOSIT, Gas(5 * TGAS))
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_callback(Self::get_val_from_map_callback::<T>)
+                    .unwrap_or_default()
+                    .into(),
+            )
+    }
+
+    #[private]
+    pub fn get_val_from_map_callback<T: BorshDeserialize>(
+        #[callback_result] last_result: Result<Vec<u8>, PromiseError>,
+        contract_name: AccountId,
+    ) -> T {
+        if let Ok(result) = last_result {
+            // Deserialize the result into the specified data type T
+            match BorshDeserialize::try_from_slice(&result) {
+                Ok(val) => {
+                    log!(format!("The last result is {:?}", val));
+                    return val;
+                }
+                Err(e) => log!(format!("Deserialization error: {:?}", e)),
+            }
+        } else {
+            log!("The batch call failed and all calls got reverted");
+        }
+
+        // Return a default value for the specified data type T
+        T::default()
     }
 }
-// #[near_bindgen]
-// #[derive(BorshDeserialize, BorshSerialize)]
-// pub struct Contract {
-//     records: LookupMap<AccountId, bool>,
-// }
-
-// impl Default for Contract {
-//     fn default() -> Self {
-//         env::panic(b"The contract is not initialized.")
-//     }
-// }
-
-// #[near_bindgen]
-// impl Contract {
-//     #[init]
-//     pub fn new() -> Self {
-//         // Useful snippet to copy/paste, making sure state isn't already initialized
-//         assert!(env::state_read::<Self>().is_none(), "Already initialized");
-//         // Note this is an implicit "return" here
-//         Self {
-//             records: LookupMap::new(b"r".to_vec()),
-//         }
-//     }
-
-//     // Public - query external greeting
-//     pub fn evaluate_check_collection_test(&mut self, contract_name: AccountId) -> Promise {
-//         // // First let's get a random string from random seed
-//         // starting off with gettin a byte vector based off the block height
-//         let get_array_key: Vec<u8> = random_seed();
-//         let get_array_value: Vec<u8> = random_seed();
-
-//         // now lets convert that byte vector into a string
-//         let random_key_string: String = String::from_utf8_lossy(&get_array_key).to_string();
-//         let random_value_string: String = String::from_utf8_lossy(&get_array_value).to_string();
-//         // let's print the string to check our input
-//         log!("The random string key  is {:?}", random_key_string);
-//         log!("The random sting value is {:?}", random_value_string);
-
-//         //Arguments for change functions
-//         let lookup_map_set_args = json!({ "key": random_key_string,"value":random_value_string })
-//             .to_string()
-//             .into_bytes();
-
-//         let vector_args = json!({"value":get_array_value.first().unwrap_or(&0)})
-//             .to_string()
-//             .into_bytes();
-
-//         //Arguments for view functions
-//         let lookup_map_key = json!({ "key": random_key_string }).to_string().into_bytes();
-
-//         log!("The random new value is {:?}", vector_args);
-
-//         Promise::new(contract_name.clone())
-//             .function_call(
-//                 "add_to_map".to_string(),
-//                 lookup_map_set_args,
-//                 NO_DEPOSIT,
-//                 Gas(5 * TGAS),
-//             )
-//             .function_call(
-//                 "add_to_vector".to_string(),
-//                 vector_args,
-//                 NO_DEPOSIT,
-//                 Gas(5 * TGAS),
-//             )
-//             .function_call(
-//                 "get_from_map".to_string(),
-//                 lookup_map_key,
-//                 NO_DEPOSIT,
-//                 Gas(5 * TGAS),
-//             )
-//             .then(
-//                 Self::ext(env::current_account_id())
-//                     .with_static_gas(Gas(5 * TGAS))
-//                     .evaluate_check_collection_callback(contract_name.clone()),
-//             )
-//     }
-
-//     #[private]
-//     pub fn evaluate_check_collection_callback(
-//         &mut self,
-//         #[callback_result] last_result: Result<String, PromiseError>,
-//         contract_name: AccountId,
-//     ) {
-//         // The callback only has access to the last action's result
-//         if let Ok(result) = last_result {
-//             log!(format!("The last result is {:?}", result));
-//         } else {
-//             log!("The batch call failed and all calls got reverted");
-//         }
-//     }
-
-//     pub fn account_participation(&self, account_name: AccountId) -> bool {
-//         self.records.get(&account_name).unwrap_or(false)
-//     }
-// }
